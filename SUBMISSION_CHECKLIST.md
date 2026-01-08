@@ -1,18 +1,23 @@
 # Competition Submission Checklist
 
+⚠️ **CRITICAL**: Read [CRITICAL_FIXES.md](CRITICAL_FIXES.md) first - contains must-have fixes for sacremoses and sentence alignment!
+
 ## 📋 Pre-Training Checklist
 
 ### Data Files Required
 - [ ] `train.csv` in input directory
 - [ ] `published_texts.csv` available (for monolingual pre-training)
 - [ ] `publications.csv` available (for data mining)
-- [ ] `Sentences_Oare_FirstWord_LinNum.csv` (optional, improves alignment)
+- [ ] `Sentences_Oare_FirstWord_LinNum.csv` ⚠️ **CRITICAL** (enables +3,000 training pairs!)
+- [ ] (Optional) sacremoses `.whl` file if using MarianMT in ensemble
 
 ### Configuration Check
 - [ ] `ENABLE_MONO_PRETRAIN=True` (in training notebooks)
 - [ ] Gap handling enabled (`keep_gaps=True`)
+- [ ] Sentence alignment will auto-use map file if present ⚠️ **Verify map file uploaded!**
 - [ ] Publications mining will run automatically if files exist
 - [ ] Batch size appropriate for your GPU (8 for T4, 4 for P100)
+- [ ] (Submission only) sacremoses installed OR MarianMT removed from ensemble
 
 ---
 
