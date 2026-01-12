@@ -2,7 +2,7 @@
 
 ## Competition-Winning Akkadian Translation System
 
-Advanced 3-model ensemble with data augmentation, gap handling, and monolingual pre-training for top-tier performance.
+Advanced 3-checkpoint ByT5 ensemble with data augmentation, gap handling, and monolingual pre-training for top-tier performance.
 
 ## 🏆 New: Competition-Winning Features
 
@@ -18,9 +18,9 @@ Advanced 3-model ensemble with data augmentation, gap handling, and monolingual 
 ## 📁 Files
 
 ### Training Notebooks
-- **`notebook-a-byt5-base-training.ipynb`** - Train ByT5-base (character-level)
-- **`notebook-b-t5-training.ipynb`** - Train T5-base (subword-level)
-- **`notebook-c-marianmt-train.ipynb`** - Train MarianMT (translation-focused)
+- **`notebook-a-byt5-monolingual.ipynb`** - ByT5 Purist (baseline + monolingual MLM)
+- **`notebook-b-byt5-augmented.ipynb`** - ByT5 Greedy (data-augmented)
+- **`notebook-c-byt5-dropout.ipynb`** - ByT5 Specialist (dropout-tuned)
 
 ### Submission Notebook
 - **`final-submission-notebook.ipynb`** - Single unified ensemble submission ⭐
@@ -33,9 +33,9 @@ Advanced 3-model ensemble with data augmentation, gap handling, and monolingual 
 ### Step 1: Train Models
 Run each training notebook on Kaggle and save outputs as datasets:
 ```
-1. notebook-a-byt5-base-training.ipynb → Save as "notebook-a-byt5"
-2. notebook-b-t5-training.ipynb → Save as "notebook-b-t5"  
-3. notebook-c-marianmt-train.ipynb → Save as "notebook-c-marian-mt"
+1. notebook-a-byt5-monolingual.ipynb → Save as "notebook-a-byt5"
+2. notebook-b-byt5-augmented.ipynb → Save as "notebook-b-byt5-augmented"  
+3. notebook-c-byt5-dropout.ipynb → Save as "notebook-c-byt5-dropout"
 ```
 
 ### Step 2: Find Optimal Weights (Optional)
@@ -46,9 +46,9 @@ Run `find-optimal-weights.ipynb`:
 
 Example output:
 ```python
-ByT5:     weight = 0.35
-T5:       weight = 0.42
-MarianMT: weight = 0.23
+ByT5-Purist:      weight = 0.35
+ByT5-Greedy:      weight = 0.35
+ByT5-Specialist:  weight = 0.30
 ```
 
 ### Step 3: Create Submission
@@ -109,21 +109,21 @@ All notebooks use consistent gap replacement:
 ### Model Configurations
 ```python
 MODEL_CONFIGS = {
-    "byt5": {
-        "weight": 0.35,  # Adjust from validation
-        "num_beams": 4,
-        "prefix": "translate Akkadian to English: "
-    },
-    "t5": {
-        "weight": 0.40,  # Usually best
-        "num_beams": 4,
-        "prefix": "translate Akkadian to English: "
-    },
-    "marian": {
-        "weight": 0.25,  # Adjust from validation
-        "num_beams": 4,
-        "prefix": ">>eng<< "  # MarianMT requires language tag
-    }
+  "byt5_purist": {
+    "weight": 0.35,  # Adjust from validation
+    "num_beams": 4,
+    "prefix": "translate Akkadian to English: "
+  },
+  "byt5_greedy": {
+    "weight": 0.35,
+    "num_beams": 4,
+    "prefix": "translate Akkadian to English: "
+  },
+  "byt5_specialist": {
+    "weight": 0.30,
+    "num_beams": 4,
+    "prefix": "translate Akkadian to English: "
+  }
 }
 ```
 
@@ -133,15 +133,15 @@ MODEL_CONFIGS = {
 ```python
 # From find-optimal-weights.ipynb
 Individual scores:
-  ByT5:     BLEU = 25.5
-  T5:       BLEU = 26.8  ← Best
-  MarianMT: BLEU = 22.7
+  ByT5-Purist:     BLEU = 25.5
+  ByT5-Greedy:     BLEU = 26.0
+  ByT5-Specialist: BLEU = 24.5
 
 # Calculate proportional weights:
-total = 75.0
-w1 = 25.5 / 75.0 = 0.34
-w2 = 26.8 / 75.0 = 0.36
-w3 = 22.7 / 75.0 = 0.30
+total = 76.0
+w1 = 25.5 / 76.0 = 0.34
+w2 = 26.0 / 76.0 = 0.34
+w3 = 24.5 / 76.0 = 0.32
 ```
 
 ### Method 2: Grid Search (Automated)
@@ -157,8 +157,8 @@ w1 = w2 = w3 = 0.333  # Simple baseline
 | Approach | BLEU Score | Memory | Speed |
 |----------|------------|--------|-------|
 | Single best model | ~26-27 | 4GB | Fast |
-| 2-model ensemble | ~27-28 | 4GB | Fast |
-| 3-model ensemble | ~28-29 | 12GB | Slow |
+| 2-checkpoint soup | ~27-28 | 4GB | Fast |
+| 3-checkpoint soup | ~28-29 | 6-8GB | Moderate |
 
 Ensemble improvement: **+1-2 BLEU points** over single best model
 
@@ -179,9 +179,8 @@ ENSEMBLE_MODE = "averaging"  # Lower memory
 ```
 
 **Q: Models won't merge?**
-- Normal! Different architectures (ByT5, T5, MarianMT)
-- Notebook automatically uses voting ensemble
-- Voting is actually better for diverse models
+- All three checkpoints are ByT5; weight averaging works out of the box.
+- If GPU RAM is tight, switch to voting to keep memory predictable.
 
 **Q: Low scores?**
 1. Check validation weights with `find-optimal-weights.ipynb`
@@ -200,54 +199,46 @@ no_repeat_ngram_size=3
 
 ```
 ┌─────────────────────────────────────┐
-│ Step 1: Train Models                │
+│ Step 1: Train ByT5 checkpoints      │
 │ (3 separate notebooks)              │
 └───────────────┬─────────────────────┘
-                │
-        ┌───────┼───────┐
-        ▼       ▼       ▼
-      ByT5     T5   MarianMT
-        │       │       │
-        └───────┼───────┘
-                │
+    │
+  ┌───────┼───────┐
+  ▼       ▼       ▼
+   Purist   Greedy   Specialist
+  │       │       │
+  └───────┼───────┘
+    │
 ┌───────────────▼─────────────────────┐
 │ Step 2: Find Optimal Weights        │
 │ (find-optimal-weights.ipynb)        │
 └───────────────┬─────────────────────┘
-                │
+    │
 ┌───────────────▼─────────────────────┐
 │ Step 3: Create Submission           │
 │ (final-submission-notebook.ipynb)   │
 └───────────────┬─────────────────────┘
-                │
-                ▼
-          submission.csv
+    │
+    ▼
+    submission.csv
 ```
 
 ## 📝 Architecture Compatibility
 
-| Model Pair | Same Architecture? | Best Strategy |
-|------------|-------------------|---------------|
-| ByT5 + T5 | Similar (T5 family) | Weight averaging |
-| ByT5 + MarianMT | Different | Voting |
-| T5 + MarianMT | Different | Voting |
-| All 3 together | Different | Voting |
-
-**Note**: The submission notebook automatically detects this and chooses the best strategy.
+All checkpoints share the ByT5 architecture, so weight averaging/model soup works directly. If memory is constrained, switch the submission notebook to voting (per-example generation from each checkpoint).
 
 ## 🎓 Understanding the Ensemble
 
 ### Why Ensemble Works
-- **ByT5**: Character-level, great for morphology
-- **T5**: Balanced, usually best overall
-- **MarianMT**: Translation-specific strengths
+- **ByT5 Purist**: Strong baseline + MLM pretraining
+- **ByT5 Greedy**: Beneficial data augmentation and aggressive beam search
+- **ByT5 Specialist**: Dropout-tuned for robustness
 
-Each model makes different errors → combining them reduces overall error rate.
+Each checkpoint makes slightly different errors → combining them reduces overall error rate.
 
 ### Weight Selection Impact
-- **Equal weights (0.33, 0.33, 0.33)**: Safe baseline
+- **Equal weights (0.33 each)**: Safe baseline
 - **Performance-based**: Use validation BLEU scores
-- **Emphasized best (0.2, 0.6, 0.2)**: Trust best model more
+- **Emphasize best (e.g., 0.2, 0.4, 0.4)**: Favor strongest variants
 
 Best practice: **Use validation scores** from `find-optimal-weights.ipynb`
-Kaggle Competiton
